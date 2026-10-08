@@ -1,10 +1,11 @@
 "use client";
 
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Search, X } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 
 import { Legend, LegendItem, LegendLabel, LegendProgress, LegendValue } from "@/components/charts/legend";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { Ga4EventUsersRow, Ga4Metrics, Ga4SourceRow } from "@/lib/ga4-types";
@@ -28,6 +29,11 @@ const collator = new Intl.Collator("pt-BR", { sensitivity: "base", numeric: true
 
 function sourceLabel(sourceMedium: string): string {
   return SOURCE_LABELS[sourceMedium] ?? sourceMedium;
+}
+
+/** Case- and accent-insensitive, so "googlé" or "GOOGLE" still match "google / cpc". */
+function normalize(text: string): string {
+  return text.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().trim();
 }
 
 function compareRows(a: Ga4SourceRow, b: Ga4SourceRow, { key, direction }: Sort): number {
@@ -96,8 +102,44 @@ export function SourcesTable({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [sort, setSort] = useState<Sort>(DEFAULT_SORT);
+  const [query, setQuery] = useState("");
+  const term = normalize(query);
+  const searching = term.length > 0;
+
   const sorted = useMemo(() => (rows ? [...rows].sort((a, b) => compareRows(a, b, sort)) : null), [rows, sort]);
-  const visible = sorted && !expanded ? sorted.slice(0, COLLAPSED_ROWS) : sorted;
+  const matches = useMemo(
+    () =>
+      sorted && searching
+        ? sorted.filter((row) => normalize(`${row.sourceMedium} ${sourceLabel(row.sourceMedium)}`).includes(term))
+        : sorted,
+    [sorted, searching, term],
+  );
+  // While searching, show every match; otherwise collapse to the top rows.
+  const visible = matches && !searching && !expanded ? matches.slice(0, COLLAPSED_ROWS) : matches;
+
+  // The footer follows the filter: GA4's totals for everything, the matching rows' sum while searching.
+  const footer = useMemo(() => {
+    if (!totals) return null;
+    if (!searching || !matches) {
+      return {
+        label: "Total",
+        sessions: totalSessions,
+        itemsAddedToCart: totals.itemsAddedToCart,
+        itemsPurchased: totals.itemsPurchased,
+        itemRevenue: totals.itemRevenue,
+      };
+    }
+    return matches.reduce(
+      (sum, row) => ({
+        ...sum,
+        sessions: sum.sessions + row.sessions,
+        itemsAddedToCart: sum.itemsAddedToCart + row.itemsAddedToCart,
+        itemsPurchased: sum.itemsPurchased + row.itemsPurchased,
+        itemRevenue: sum.itemRevenue + row.itemRevenue,
+      }),
+      { label: "Total filtrado", sessions: 0, itemsAddedToCart: 0, itemsPurchased: 0, itemRevenue: 0 },
+    );
+  }, [totals, totalSessions, searching, matches]);
 
   // Same column flips direction; a new column starts A→Z for text and highest-first for numbers.
   const onSort = (key: SortKey) =>
@@ -106,15 +148,41 @@ export function SourcesTable({
         ? { key, direction: current.direction === "asc" ? "desc" : "asc" }
         : { key, direction: key === "sourceMedium" ? "asc" : "desc" },
     );
-  const hidden = rows ? rows.length - COLLAPSED_ROWS : 0;
+  const hidden = !searching && rows ? rows.length - COLLAPSED_ROWS : 0;
 
   return (
     <ChartCard
       title="Origem / mídia"
       description="Origem da sessão · sessões com interação com o ingresso (carrinho, checkout ou compra)"
       className={className}
+      action={
+        <div className="relative w-full sm:w-60">
+          <Search
+            className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
+            aria-hidden
+          />
+          <Input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Filtrar origem / mídia"
+            aria-label="Filtrar origem / mídia"
+            className="h-8 pr-8 pl-8 text-sm [&::-webkit-search-cancel-button]:hidden"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              aria-label="Limpar filtro"
+              className="absolute top-1/2 right-1.5 flex size-5 -translate-y-1/2 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+            >
+              <X className="size-3.5" aria-hidden />
+            </button>
+          )}
+        </div>
+      }
     >
-      {visible && totals ? (
+      {visible && footer ? (
         <div className="-mx-2 flex flex-col gap-2">
           <Table>
             <TableHeader>
@@ -163,7 +231,7 @@ export function SourcesTable({
               {visible.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center text-muted-foreground">
-                    Sem dados no período
+                    {searching ? `Nenhuma origem / mídia contém “${query.trim()}”` : "Sem dados no período"}
                   </TableCell>
                 </TableRow>
               )}
@@ -171,23 +239,23 @@ export function SourcesTable({
             <TableFooter className="bg-transparent">
               <TableRow className="hover:bg-transparent">
                 <TableCell>
-                  <span className="block font-medium">Total</span>
+                  <span className="block font-medium">{footer.label}</span>
                   <span className="block text-xs font-normal text-muted-foreground tabular-nums sm:hidden">
-                    {formatInteger(totalSessions)} sessões · {formatInteger(totals.itemsAddedToCart)} adições ·{" "}
-                    {formatInteger(totals.itemsPurchased)} comprados
+                    {formatInteger(footer.sessions)} sessões · {formatInteger(footer.itemsAddedToCart)} adições ·{" "}
+                    {formatInteger(footer.itemsPurchased)} comprados
                   </span>
                 </TableCell>
                 <TableCell className="hidden text-right font-medium tabular-nums sm:table-cell">
-                  {formatInteger(totalSessions)}
+                  {formatInteger(footer.sessions)}
                 </TableCell>
                 <TableCell className="hidden text-right font-medium tabular-nums sm:table-cell">
-                  {formatInteger(totals.itemsAddedToCart)}
+                  {formatInteger(footer.itemsAddedToCart)}
                 </TableCell>
                 <TableCell className="hidden text-right font-medium tabular-nums sm:table-cell">
-                  {formatInteger(totals.itemsPurchased)}
+                  {formatInteger(footer.itemsPurchased)}
                 </TableCell>
                 <TableCell className="text-right font-medium tabular-nums">
-                  {formatCurrency(totals.itemRevenue, currency)}
+                  {formatCurrency(footer.itemRevenue, currency)}
                 </TableCell>
               </TableRow>
             </TableFooter>
