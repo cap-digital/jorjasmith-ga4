@@ -143,25 +143,28 @@ async function fetchRange(range: Ga4DateRange) {
   };
 }
 
-async function fetchSources(range: Ga4DateRange): Promise<Ga4SourceRow[]> {
+async function fetchSources(range: Ga4DateRange): Promise<{ rows: Ga4SourceRow[]; totalSessions: number }> {
   const [report] = await getGa4Client().runReport({
     property: getGa4Property(),
     dateRanges: [range],
     dimensions: [{ name: "sessionSourceMedium" }],
-    metrics: [{ name: "itemsAddedToCart" }, { name: "itemsPurchased" }, { name: "itemRevenue" }],
+    metrics: [{ name: "sessions" }, { name: "itemsAddedToCart" }, { name: "itemsPurchased" }, { name: "itemRevenue" }],
     dimensionFilter: ITEM_FILTER,
+    metricAggregations: [protos.google.analytics.data.v1beta.MetricAggregation.TOTAL],
     orderBys: [
       { metric: { metricName: "itemRevenue" }, desc: true },
       { metric: { metricName: "itemsAddedToCart" }, desc: true },
     ],
     limit: 500,
   });
-  return (report.rows ?? []).map((row) => ({
+  const rows = (report.rows ?? []).map((row) => ({
     sourceMedium: row.dimensionValues?.[0]?.value ?? "",
-    itemsAddedToCart: Number(row.metricValues?.[0]?.value ?? 0),
-    itemsPurchased: Number(row.metricValues?.[1]?.value ?? 0),
-    itemRevenue: round(Number(row.metricValues?.[2]?.value ?? 0), 2),
+    sessions: Number(row.metricValues?.[0]?.value ?? 0),
+    itemsAddedToCart: Number(row.metricValues?.[1]?.value ?? 0),
+    itemsPurchased: Number(row.metricValues?.[2]?.value ?? 0),
+    itemRevenue: round(Number(row.metricValues?.[3]?.value ?? 0), 2),
   }));
+  return { rows, totalSessions: Number(report.totals?.[0]?.metricValues?.[0]?.value ?? 0) };
 }
 
 // eventCount can't be filtered by itemName in GA4, so this counts distinct users per event instead.
@@ -211,7 +214,7 @@ export async function GET(request: NextRequest) {
     let current: Awaited<ReturnType<typeof fetchRange>>;
     let previous: Awaited<ReturnType<typeof fetchRange>> | null;
     let range: Ga4DateRange;
-    let sources: Ga4SourceRow[];
+    let sources: Awaited<ReturnType<typeof fetchSources>>;
     let eventUsers: Ga4EventUsersRow[];
 
     if (cachedTimeZone) {
@@ -258,7 +261,8 @@ export async function GET(request: NextRequest) {
       daily,
       previous: previous && { dateRange: previousRange(range), totals: previous.totals },
       change: previous ? relativeChange(current.totals, previous.totals) : noChange(current.totals),
-      sources,
+      sources: sources.rows,
+      sourcesTotalSessions: sources.totalSessions,
       eventUsers,
       currencyCode: current.currencyCode,
       timeZone: current.timeZone,

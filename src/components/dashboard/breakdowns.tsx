@@ -84,11 +84,15 @@ function SortableHead({
 export function SourcesTable({
   rows,
   totals,
+  totalSessions,
   currency,
+  className,
 }: {
   rows: Ga4SourceRow[] | null;
   totals: Ga4Metrics | null;
+  totalSessions: number;
   currency: string;
+  className?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [sort, setSort] = useState<Sort>(DEFAULT_SORT);
@@ -107,8 +111,8 @@ export function SourcesTable({
   return (
     <ChartCard
       title="Origem / mídia"
-      description="Origem da sessão em que o item foi adicionado ou comprado"
-      className="lg:col-span-2"
+      description="Origem da sessão · sessões com interação com o ingresso (carrinho, checkout ou compra)"
+      className={className}
     >
       {visible && totals ? (
         <div className="-mx-2 flex flex-col gap-2">
@@ -117,6 +121,9 @@ export function SourcesTable({
               <TableRow className="hover:bg-transparent">
                 <SortableHead sortKey="sourceMedium" sort={sort} onSort={onSort} align="left">
                   Origem / mídia
+                </SortableHead>
+                <SortableHead sortKey="sessions" sort={sort} onSort={onSort} className="hidden sm:table-cell">
+                  Sessões
                 </SortableHead>
                 <SortableHead sortKey="itemsAddedToCart" sort={sort} onSort={onSort} className="hidden sm:table-cell">
                   Adições ao carrinho
@@ -137,8 +144,12 @@ export function SourcesTable({
                       {sourceLabel(row.sourceMedium)}
                     </span>
                     <span className="block text-xs text-muted-foreground tabular-nums sm:hidden">
-                      {formatInteger(row.itemsAddedToCart)} adições · {formatInteger(row.itemsPurchased)} comprados
+                      {formatInteger(row.sessions)} sessões · {formatInteger(row.itemsAddedToCart)} adições ·{" "}
+                      {formatInteger(row.itemsPurchased)} comprados
                     </span>
+                  </TableCell>
+                  <TableCell className="hidden text-right tabular-nums sm:table-cell">
+                    {formatInteger(row.sessions)}
                   </TableCell>
                   <TableCell className="hidden text-right tabular-nums sm:table-cell">
                     {formatInteger(row.itemsAddedToCart)}
@@ -151,7 +162,7 @@ export function SourcesTable({
               ))}
               {visible.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground">
+                  <TableCell colSpan={5} className="text-center text-muted-foreground">
                     Sem dados no período
                   </TableCell>
                 </TableRow>
@@ -162,8 +173,12 @@ export function SourcesTable({
                 <TableCell>
                   <span className="block font-medium">Total</span>
                   <span className="block text-xs font-normal text-muted-foreground tabular-nums sm:hidden">
-                    {formatInteger(totals.itemsAddedToCart)} adições · {formatInteger(totals.itemsPurchased)} comprados
+                    {formatInteger(totalSessions)} sessões · {formatInteger(totals.itemsAddedToCart)} adições ·{" "}
+                    {formatInteger(totals.itemsPurchased)} comprados
                   </span>
+                </TableCell>
+                <TableCell className="hidden text-right font-medium tabular-nums sm:table-cell">
+                  {formatInteger(totalSessions)}
                 </TableCell>
                 <TableCell className="hidden text-right font-medium tabular-nums sm:table-cell">
                   {formatInteger(totals.itemsAddedToCart)}
@@ -202,7 +217,7 @@ const EVENT_LABELS: Record<string, { label: string; color: string }> = {
   purchase: { label: "Comprou", color: SOLD_COLOR },
 };
 
-export function EventUsers({ rows }: { rows: Ga4EventUsersRow[] | null }) {
+export function EventUsers({ rows, className }: { rows: Ga4EventUsersRow[] | null; className?: string }) {
   const max = rows?.[0]?.users ?? 0;
   const items =
     rows?.map((row) => ({
@@ -213,7 +228,11 @@ export function EventUsers({ rows }: { rows: Ga4EventUsersRow[] | null }) {
     })) ?? [];
 
   return (
-    <ChartCard title="Usuários por evento" description="Pessoas que dispararam cada evento com o item">
+    <ChartCard
+      title="Usuários por evento"
+      description="Pessoas que dispararam cada evento com o item"
+      className={className}
+    >
       {rows ? (
         items.length > 0 ? (
           <Legend items={items} className="gap-4">

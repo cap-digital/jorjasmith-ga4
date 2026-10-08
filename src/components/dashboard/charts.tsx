@@ -174,19 +174,21 @@ export function RevenueChart({
   total,
   currency,
   status,
+  className,
 }: {
   data: ChartRow[];
   granularity: Granularity;
   total: number | null;
   currency: string;
   status: ChartStatus;
+  className?: string;
 }) {
   const wide = useIsWide();
   return (
     <ChartCard
       title={GRANULARITY_LABELS[granularity].revenueTitle}
       description={total === null ? "Receita no período" : `${formatCurrency(total, currency)} no período`}
-      className="lg:col-span-3"
+      className={className}
     >
       <BarChart
         data={data}

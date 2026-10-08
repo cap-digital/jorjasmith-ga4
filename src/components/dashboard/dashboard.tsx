@@ -173,6 +173,15 @@ export function Dashboard() {
         >
           <CartVsSalesChart data={chartRows} granularity={granularity} totals={report?.totals ?? null} status={chartStatus} />
           <CartFunnel totals={report?.totals ?? null} />
+        </motion.section>
+
+        {/* Users by event (35%) beside revenue (65%) on large screens; stacked below. */}
+        <motion.section
+          variants={staggerContainer}
+          aria-label="Usuários e receita"
+          className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-[minmax(0,35fr)_minmax(0,65fr)]"
+        >
+          <EventUsers rows={report?.eventUsers ?? null} />
           <RevenueChart
             data={chartRows}
             granularity={granularity}
@@ -180,8 +189,15 @@ export function Dashboard() {
             currency={currency}
             status={chartStatus}
           />
-          <SourcesTable rows={report?.sources ?? null} totals={report?.totals ?? null} currency={currency} />
-          <EventUsers rows={report?.eventUsers ?? null} />
+        </motion.section>
+
+        <motion.section variants={staggerContainer} aria-label="Origem / mídia">
+          <SourcesTable
+            rows={report?.sources ?? null}
+            totals={report?.totals ?? null}
+            totalSessions={report?.sourcesTotalSessions ?? 0}
+            currency={currency}
+          />
         </motion.section>
       </motion.main>
     </MotionConfig>
