@@ -129,7 +129,7 @@ export function QrCard({
                           <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-chart-1" />
                           {row.source || "(sem origem)"}
                         </span>
-                        <span className="block pl-3.5 text-xs text-muted-foreground md:hidden">
+                        <span className="block pl-3.5 text-xs whitespace-normal text-muted-foreground md:hidden">
                           {row.medium} · {row.campaign || "(sem campanha)"} · {formatInteger(row.itemsPurchased)} comprados
                         </span>
                       </TableCell>

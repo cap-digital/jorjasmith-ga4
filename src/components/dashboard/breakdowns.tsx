@@ -43,7 +43,10 @@ function TableModal({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <SourceSearch value={query} onChange={onQueryChange} />
-        <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1">{children}</div>
+        {/* Vertical scroll only, flush with the modal edge; the padding absorbs the table's -mx-2 bleed. */}
+        <div className="scrollbar-thin -mx-5 min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 [scrollbar-gutter:stable]">
+          {children}
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -167,13 +170,21 @@ const pageColumns: SourceColumn<Ga4PageSourceRow>[] = [
   sessionsColumn,
   // Users can arrive through more than one source, so a filtered sum may slightly overcount.
   { key: "users", label: "Usuários", mobileLabel: "usuários", format: integer, total: sumOf("users") },
-  { key: "newUsers", label: "Novos usuários", mobileLabel: "novos", format: integer, total: sumOf("newUsers") },
+  {
+    key: "newUsers",
+    label: "Novos usuários",
+    mobileLabel: "novos",
+    format: integer,
+    total: sumOf("newUsers"),
+    wideOnly: true,
+  },
   engagementColumn,
   {
     key: "engagementSecondsPerSession",
     label: "Tempo por sessão",
     mobileLabel: "por sessão",
     format: formatDuration,
+    wideOnly: true,
     total: (rows) => {
       const sessions = sumOf<Ga4PageSourceRow>("sessions")(rows);
       return sessions > 0 ? sumOf<Ga4PageSourceRow>("engagementSeconds")(rows) / sessions : null;

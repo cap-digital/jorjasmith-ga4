@@ -6,9 +6,10 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["@google-analytics/data"],
   partialPrefetching: true,
   experimental: {
-    // The restored build cache (.next/cache on Vercel) served the previous deploy's CSS
-    // through the @tailwindcss/turbopack loader. Always compile builds from scratch.
+    // The persistent cache serves stale CSS through the @tailwindcss/turbopack loader: on Vercel it
+    // restored the previous deploy's globals.css, and in dev it missed globals.css edits. Compile fresh.
     turbopackFileSystemCacheForBuild: false,
+    turbopackFileSystemCacheForDev: false,
   },
   turbopack: {
     rules: {

@@ -29,6 +29,8 @@ export type SourceColumn<Row extends SourceRow> = {
   total: (rows: Row[]) => number | null;
   /** Shown as a column on mobile too; the others move to a subline under the source. */
   primary?: boolean;
+  /** Only shown from `lg` up, so mid-size screens never need horizontal scroll (still in the mobile subline). */
+  wideOnly?: boolean;
 };
 
 type SortKey<Row extends SourceRow> = "sourceMedium" | NumericKey<Row>;
@@ -171,7 +173,8 @@ export function SourceTable<Row extends SourceRow>({
   const secondary = columns.filter((column) => !column.primary);
   const subline = (value: (column: SourceColumn<Row>) => number | null) =>
     secondary.map((column) => `${column.format(value(column))} ${column.mobileLabel}`).join(" · ");
-  const hideOnMobile = (column: SourceColumn<Row>) => (column.primary ? "" : "hidden sm:table-cell");
+  const hideOnMobile = (column: SourceColumn<Row>) =>
+    column.primary ? "" : column.wideOnly ? "hidden lg:table-cell" : "hidden sm:table-cell";
 
   if (!visible) {
     return (
@@ -216,7 +219,7 @@ export function SourceTable<Row extends SourceRow>({
                 <span className="block truncate font-medium" title={row.sourceMedium}>
                   {sourceLabel(row.sourceMedium)}
                 </span>
-                <span className="block text-xs text-muted-foreground tabular-nums sm:hidden">
+                <span className="block text-xs whitespace-normal text-muted-foreground tabular-nums sm:hidden">
                   {subline((column) => row[column.key] as number | null)}
                 </span>
               </TableCell>
@@ -239,7 +242,7 @@ export function SourceTable<Row extends SourceRow>({
           <TableRow className="hover:bg-transparent">
             <TableCell>
               <span className="block font-medium">{searching ? "Total filtrado" : "Total"}</span>
-              <span className="block text-xs font-normal text-muted-foreground tabular-nums sm:hidden">
+              <span className="block text-xs font-normal whitespace-normal text-muted-foreground tabular-nums sm:hidden">
                 {subline(footerValue)}
               </span>
             </TableCell>
