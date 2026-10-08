@@ -41,6 +41,16 @@ export function formatSignedPercent(ratio: number): string {
   return signedPercentFormat.format(ratio);
 }
 
+/** 39 → "39s", 109 → "1min 49s" */
+export function formatDuration(seconds: number | null): string {
+  if (seconds === null) return EMPTY;
+  const total = Math.round(seconds);
+  const minutes = Math.floor(total / 60);
+  const rest = total % 60;
+  if (minutes === 0) return `${rest}s`;
+  return rest === 0 ? `${minutes}min` : `${minutes}min ${rest}s`;
+}
+
 /** "2026-09-09" → "09/09" */
 export function formatDayMonth(isoDate: string): string {
   const [, month, day] = isoDate.split("-");

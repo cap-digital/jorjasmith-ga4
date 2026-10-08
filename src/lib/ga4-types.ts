@@ -38,6 +38,22 @@ export type Ga4EventUsersRow = {
   users: number;
 };
 
+/** Traffic on the event page (sales.ticketsforfun.com.br/#/event/jorja-smith). */
+export type Ga4PageMetrics = {
+  sessions: number;
+  users: number;
+  newUsers: number;
+  engagedSessions: number;
+  /** engagedSessions / sessions (0.69 = 69%). */
+  engagementRate: number | null;
+  /** Total engagement seconds, for weighted averages. */
+  engagementSeconds: number;
+  /** engagementSeconds / sessions. */
+  engagementSecondsPerSession: number | null;
+};
+
+export type Ga4PageSourceRow = Ga4PageMetrics & { sourceMedium: string };
+
 export type Ga4Report = {
   itemName: string;
   dateRange: Ga4DateRange;
@@ -53,6 +69,11 @@ export type Ga4Report = {
   sourcesTotalSessions: number;
   /** Sorted by users. */
   eventUsers: Ga4EventUsersRow[];
+  page: {
+    totals: Ga4PageMetrics;
+    /** Sorted by sessions. */
+    sources: Ga4PageSourceRow[];
+  };
   currencyCode: string;
   timeZone: string;
 };

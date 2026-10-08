@@ -9,6 +9,7 @@ import type {
   Ga4EventUsersRow,
   Ga4MetricKey,
   Ga4Metrics,
+  Ga4PageMetrics,
   Ga4Report,
   Ga4SourceRow,
 } from "@/lib/ga4-types";
@@ -21,6 +22,16 @@ const ITEM_FILTER = {
     stringFilter: { matchType: "EXACT" as const, value: ITEM_NAME },
   },
 };
+
+// The event page is a hash route (#/event/jorja-smith), which GA4 records as "/" in pagePath.
+// Its title is reliable, in every language the site serves: "Tickets For Fun | Jorja Smith", ...
+const PAGE_FILTER = {
+  filter: {
+    fieldName: "pageTitle",
+    stringFilter: { matchType: "ENDS_WITH" as const, value: `| ${ITEM_NAME}` },
+  },
+};
+const PAGE_METRICS = ["sessions", "totalUsers", "newUsers", "engagedSessions", "userEngagementDuration"] as const;
 
 const METRICS = ["itemsAddedToCart", "itemsCheckedOut", "itemsPurchased", "itemRevenue"] as const;
 type MetricName = (typeof METRICS)[number];
@@ -168,6 +179,41 @@ async function fetchSources(range: Ga4DateRange): Promise<{ rows: Ga4SourceRow[]
 }
 
 // eventCount can't be filtered by itemName in GA4, so this counts distinct users per event instead.
+function toPageMetrics(values: { value?: string | null }[] | null | undefined): Ga4PageMetrics {
+  const [sessions, users, newUsers, engagedSessions, engagementSeconds] = PAGE_METRICS.map((_, i) =>
+    Number(values?.[i]?.value ?? 0),
+  );
+  return {
+    sessions,
+    users,
+    newUsers,
+    engagedSessions,
+    engagementRate: ratio(engagedSessions, sessions, 4),
+    engagementSeconds,
+    engagementSecondsPerSession: ratio(engagementSeconds, sessions, 1),
+  };
+}
+
+async function fetchPage(range: Ga4DateRange): Promise<Ga4Report["page"]> {
+  const [report] = await getGa4Client().runReport({
+    property: getGa4Property(),
+    dateRanges: [range],
+    dimensions: [{ name: "sessionSourceMedium" }],
+    metrics: PAGE_METRICS.map((name) => ({ name })),
+    dimensionFilter: PAGE_FILTER,
+    metricAggregations: [protos.google.analytics.data.v1beta.MetricAggregation.TOTAL],
+    orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
+    limit: 500,
+  });
+  return {
+    totals: toPageMetrics(report.totals?.[0]?.metricValues),
+    sources: (report.rows ?? []).map((row) => ({
+      sourceMedium: row.dimensionValues?.[0]?.value ?? "",
+      ...toPageMetrics(row.metricValues),
+    })),
+  };
+}
+
 async function fetchEventUsers(range: Ga4DateRange): Promise<Ga4EventUsersRow[]> {
   const [report] = await getGa4Client().runReport({
     property: getGa4Property(),
@@ -216,17 +262,19 @@ export async function GET(request: NextRequest) {
     let range: Ga4DateRange;
     let sources: Awaited<ReturnType<typeof fetchSources>>;
     let eventUsers: Ga4EventUsersRow[];
+    let page: Ga4Report["page"];
 
     if (cachedTimeZone) {
       range = resolveRange(query, cachedTimeZone);
       if (range.startDate > range.endDate) {
         return Response.json({ error: "startDate must be on or before endDate" }, { status: 400 });
       }
-      [current, previous, sources, eventUsers] = await Promise.all([
+      [current, previous, sources, eventUsers, page] = await Promise.all([
         fetchRange(range),
         fetchPrevious(range),
         fetchSources(range),
         fetchEventUsers(range),
+        fetchPage(range),
       ]);
     } else {
       current = await fetchRange(query);
@@ -235,10 +283,11 @@ export async function GET(request: NextRequest) {
       if (range.startDate > range.endDate) {
         return Response.json({ error: "startDate must be on or before endDate" }, { status: 400 });
       }
-      [previous, sources, eventUsers] = await Promise.all([
+      [previous, sources, eventUsers, page] = await Promise.all([
         fetchPrevious(range),
         fetchSources(range),
         fetchEventUsers(range),
+        fetchPage(range),
       ]);
     }
 
@@ -264,6 +313,7 @@ export async function GET(request: NextRequest) {
       sources: sources.rows,
       sourcesTotalSessions: sources.totalSessions,
       eventUsers,
+      page,
       currencyCode: current.currencyCode,
       timeZone: current.timeZone,
     };

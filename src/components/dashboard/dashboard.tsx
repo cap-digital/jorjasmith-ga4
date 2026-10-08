@@ -9,7 +9,7 @@ import { bucketize, granularityFor, type Bucket } from "@/lib/buckets";
 import type { Ga4Error, Ga4MetricKey, Ga4Report } from "@/lib/ga4-types";
 import { formatCurrency, formatFullDate, formatInteger, formatPercent } from "@/lib/format";
 
-import { EventUsers, SourcesTable } from "./breakdowns";
+import { EventUsers, PageTraffic, SourcesTable } from "./breakdowns";
 import { CartFunnel, CartVsSalesChart, RevenueChart, type ChartRow } from "./charts";
 import { KpiCard, type Comparison, type KpiData } from "./kpi-card";
 import { fadeUp, staggerContainer } from "./motion";
@@ -191,7 +191,8 @@ export function Dashboard() {
           />
         </motion.section>
 
-        <motion.section variants={staggerContainer} aria-label="Origem / mídia">
+        <motion.section variants={staggerContainer} aria-label="Origem / mídia" className="grid gap-3 sm:gap-4">
+          <PageTraffic page={report?.page ?? null} />
           <SourcesTable
             rows={report?.sources ?? null}
             totals={report?.totals ?? null}
