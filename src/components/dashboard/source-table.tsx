@@ -3,13 +3,9 @@
 import { ArrowDown, ArrowUp, ArrowUpDown, Search, X } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { formatInteger } from "@/lib/format";
-
-const COLLAPSED_ROWS = 8;
 
 const SOURCE_LABELS: Record<string, string> = {
   "(data not available)": "(dados indisponíveis)",
@@ -122,16 +118,18 @@ export function SourceTable<Row extends SourceRow>({
   rows,
   columns,
   totals,
-  query,
+  query = "",
   defaultSort,
+  maxRows,
 }: {
   rows: Row[] | null;
   columns: SourceColumn<Row>[];
   totals: Partial<Record<NumericKey<Row>, number | null>> | null;
-  query: string;
+  query?: string;
   defaultSort: NumericKey<Row>;
+  /** Show only the top rows (compact card); search always shows every match. */
+  maxRows?: number;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const [sort, setSort] = useState<Sort<Row>>({ key: defaultSort, direction: "desc" });
   const term = normalize(query);
   const searching = term.length > 0;
@@ -157,9 +155,7 @@ export function SourceTable<Row extends SourceRow>({
         : sorted,
     [sorted, searching, term],
   );
-  // While searching, show every match; otherwise collapse to the top rows.
-  const visible = matches && !searching && !expanded ? matches.slice(0, COLLAPSED_ROWS) : matches;
-  const hidden = !searching && rows ? rows.length - COLLAPSED_ROWS : 0;
+  const visible = matches && !searching && maxRows ? matches.slice(0, maxRows) : matches;
 
   const footerValue = (column: SourceColumn<Row>) =>
     searching && matches ? column.total(matches) : (totals?.[column.key] ?? column.total(rows ?? []));
@@ -188,7 +184,7 @@ export function SourceTable<Row extends SourceRow>({
   }
 
   return (
-    <div className="-mx-2 flex flex-col gap-2">
+    <div className="-mx-2">
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
@@ -255,11 +251,6 @@ export function SourceTable<Row extends SourceRow>({
           </TableRow>
         </TableFooter>
       </Table>
-      {hidden > 0 && (
-        <Button variant="ghost" size="sm" className="self-start" onClick={() => setExpanded((open) => !open)}>
-          {expanded ? "Mostrar menos" : `Mostrar todas (${formatInteger(rows!.length)})`}
-        </Button>
-      )}
     </div>
   );
 }

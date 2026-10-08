@@ -10,6 +10,8 @@ import type {
   Ga4MetricKey,
   Ga4Metrics,
   Ga4PageMetrics,
+  Ga4QrMetrics,
+  Ga4QrRow,
   Ga4Report,
   Ga4SourceRow,
 } from "@/lib/ga4-types";
@@ -31,6 +33,22 @@ const PAGE_FILTER = {
     stringFilter: { matchType: "ENDS_WITH" as const, value: `| ${ITEM_NAME}` },
   },
 };
+// QR codes: utm_medium or utm_source like "qr-code", "qrcode", "qr_code", "qr code".
+const qrField = (fieldName: string) => ({
+  filter: { fieldName, stringFilter: { matchType: "FULL_REGEXP" as const, value: "(?i).*qr[-_ ]?code.*" } },
+});
+const QR_FILTER = { orGroup: { expressions: [qrField("sessionMedium"), qrField("sessionSource")] } };
+// Tied to Jorja Smith through the campaign name or a visit to the event page.
+const JORJA_TRAFFIC_FILTER = {
+  orGroup: {
+    expressions: [
+      { filter: { fieldName: "sessionCampaignName", stringFilter: { matchType: "CONTAINS" as const, value: "jorja" } } },
+      PAGE_FILTER,
+    ],
+  },
+};
+const QR_DIMENSIONS = ["sessionSource", "sessionMedium", "sessionCampaignName"] as const;
+
 const PAGE_METRICS = ["sessions", "totalUsers", "newUsers", "engagedSessions", "userEngagementDuration"] as const;
 
 const METRICS = ["itemsAddedToCart", "itemsCheckedOut", "itemsPurchased", "itemRevenue"] as const;
@@ -211,6 +229,104 @@ async function fetchPage(range: Ga4DateRange): Promise<Ga4Report["page"]> {
   };
 }
 
+function emptyQrMetrics(): Ga4QrMetrics {
+  return {
+    sessions: 0,
+    mobileSessions: 0,
+    users: 0,
+    newUsers: 0,
+    engagedSessions: 0,
+    itemsAddedToCart: 0,
+    itemsPurchased: 0,
+    itemRevenue: 0,
+  };
+}
+
+async function fetchQr(range: Ga4DateRange): Promise<Ga4Report["qr"]> {
+  const client = getGa4Client();
+  const property = getGa4Property();
+  const qrJorja = { andGroup: { expressions: [QR_FILTER, JORJA_TRAFFIC_FILTER] } };
+  const [[traffic], [items], [latest]] = await Promise.all([
+    client.runReport({
+      property,
+      dateRanges: [range],
+      dimensions: [...QR_DIMENSIONS, "deviceCategory"].map((name) => ({ name })),
+      metrics: [{ name: "sessions" }, { name: "totalUsers" }, { name: "newUsers" }, { name: "engagedSessions" }],
+      dimensionFilter: qrJorja,
+      metricAggregations: [protos.google.analytics.data.v1beta.MetricAggregation.TOTAL],
+      limit: 1000,
+    }),
+    client.runReport({
+      property,
+      dateRanges: [range],
+      dimensions: QR_DIMENSIONS.map((name) => ({ name })),
+      metrics: [{ name: "itemsAddedToCart" }, { name: "itemsPurchased" }, { name: "itemRevenue" }],
+      dimensionFilter: { andGroup: { expressions: [QR_FILTER, ITEM_FILTER] } },
+      limit: 1000,
+    }),
+    client.runReport({
+      property,
+      dateRanges: [range],
+      dimensions: [{ name: "dateHour" }],
+      metrics: [{ name: "sessions" }],
+      dimensionFilter: qrJorja,
+      orderBys: [{ dimension: { dimensionName: "dateHour" }, desc: true }],
+      limit: 1,
+    }),
+  ]);
+
+  const rows = new Map<string, Ga4QrRow>();
+  const rowFor = (values: { value?: string | null }[] | null | undefined) => {
+    const [source, medium, campaign] = QR_DIMENSIONS.map((_, i) => values?.[i]?.value ?? "");
+    const key = `${source}\u0000${medium}\u0000${campaign}`;
+    let row = rows.get(key);
+    if (!row) {
+      row = { source, medium, campaign, ...emptyQrMetrics() };
+      rows.set(key, row);
+    }
+    return row;
+  };
+  const metric = (values: { value?: string | null }[] | null | undefined, i: number) => Number(values?.[i]?.value ?? 0);
+
+  // Traffic comes split by device; users summed across devices can overcount someone on two devices.
+  for (const r of traffic.rows ?? []) {
+    const row = rowFor(r.dimensionValues);
+    const sessions = metric(r.metricValues, 0);
+    row.sessions += sessions;
+    if (r.dimensionValues?.[3]?.value === "mobile") row.mobileSessions += sessions;
+    row.users += metric(r.metricValues, 1);
+    row.newUsers += metric(r.metricValues, 2);
+    row.engagedSessions += metric(r.metricValues, 3);
+  }
+  // Ticket activity also counts QR sessions that skipped the campaign name and the event page title.
+  for (const r of items.rows ?? []) {
+    const row = rowFor(r.dimensionValues);
+    row.itemsAddedToCart += metric(r.metricValues, 0);
+    row.itemsPurchased += metric(r.metricValues, 1);
+    row.itemRevenue = round(row.itemRevenue + metric(r.metricValues, 2), 2);
+  }
+
+  const list = [...rows.values()].sort((a, b) => b.sessions - a.sessions || b.itemRevenue - a.itemRevenue);
+  const totalTraffic = traffic.totals?.[0]?.metricValues;
+  const totals: Ga4QrMetrics = {
+    ...emptyQrMetrics(),
+    // GA4's deduplicated totals for traffic; sums for the rest.
+    sessions: metric(totalTraffic, 0),
+    users: metric(totalTraffic, 1),
+    newUsers: metric(totalTraffic, 2),
+    engagedSessions: metric(totalTraffic, 3),
+    mobileSessions: list.reduce((sum, row) => sum + row.mobileSessions, 0),
+    itemsAddedToCart: list.reduce((sum, row) => sum + row.itemsAddedToCart, 0),
+    itemsPurchased: list.reduce((sum, row) => sum + row.itemsPurchased, 0),
+    itemRevenue: round(list.reduce((sum, row) => sum + row.itemRevenue, 0), 2),
+  };
+
+  const hour = latest.rows?.[0]?.dimensionValues?.[0]?.value; // "2026100715"
+  const lastSeen = hour ? `${hour.slice(0, 4)}-${hour.slice(4, 6)}-${hour.slice(6, 8)}T${hour.slice(8, 10)}` : null;
+
+  return { totals, rows: list, lastSeen };
+}
+
 async function fetchEventUsers(range: Ga4DateRange): Promise<Ga4EventUsersRow[]> {
   const [report] = await getGa4Client().runReport({
     property: getGa4Property(),
@@ -260,18 +376,20 @@ export async function GET(request: NextRequest) {
     let sources: Ga4SourceRow[];
     let eventUsers: Ga4EventUsersRow[];
     let page: Ga4Report["page"];
+    let qr: Ga4Report["qr"];
 
     if (cachedTimeZone) {
       range = resolveRange(query, cachedTimeZone);
       if (range.startDate > range.endDate) {
         return Response.json({ error: "startDate must be on or before endDate" }, { status: 400 });
       }
-      [current, previous, sources, eventUsers, page] = await Promise.all([
+      [current, previous, sources, eventUsers, page, qr] = await Promise.all([
         fetchRange(range),
         fetchPrevious(range),
         fetchSources(range),
         fetchEventUsers(range),
         fetchPage(range),
+        fetchQr(range),
       ]);
     } else {
       current = await fetchRange(query);
@@ -280,11 +398,12 @@ export async function GET(request: NextRequest) {
       if (range.startDate > range.endDate) {
         return Response.json({ error: "startDate must be on or before endDate" }, { status: 400 });
       }
-      [previous, sources, eventUsers, page] = await Promise.all([
+      [previous, sources, eventUsers, page, qr] = await Promise.all([
         fetchPrevious(range),
         fetchSources(range),
         fetchEventUsers(range),
         fetchPage(range),
+        fetchQr(range),
       ]);
     }
 
@@ -310,6 +429,7 @@ export async function GET(request: NextRequest) {
       sources,
       eventUsers,
       page,
+      qr,
       currencyCode: current.currencyCode,
       timeZone: current.timeZone,
     };

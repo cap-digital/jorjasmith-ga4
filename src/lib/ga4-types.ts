@@ -52,6 +52,21 @@ export type Ga4PageMetrics = {
 
 export type Ga4PageSourceRow = Ga4PageMetrics & { sourceMedium: string };
 
+export type Ga4QrMetrics = {
+  sessions: number;
+  /** QR codes are read on phones; desktop sessions are usually someone testing the link. */
+  mobileSessions: number;
+  users: number;
+  newUsers: number;
+  engagedSessions: number;
+  itemsAddedToCart: number;
+  itemsPurchased: number;
+  itemRevenue: number;
+};
+
+/** One QR placement: utm_source (where it was posted), utm_medium (qr-code/qrcode), utm_campaign. */
+export type Ga4QrRow = Ga4QrMetrics & { source: string; medium: string; campaign: string };
+
 export type Ga4Report = {
   itemName: string;
   dateRange: Ga4DateRange;
@@ -69,6 +84,14 @@ export type Ga4Report = {
     totals: Ga4PageMetrics;
     /** Sorted by sessions. */
     sources: Ga4PageSourceRow[];
+  };
+  /** Jorja Smith QR codes: QR medium/source and a Jorja campaign, Jorja page or Jorja ticket. */
+  qr: {
+    totals: Ga4QrMetrics;
+    /** Sorted by sessions. */
+    rows: Ga4QrRow[];
+    /** Last hour with a QR session, "YYYY-MM-DDTHH" in the property's time zone. */
+    lastSeen: string | null;
   };
   currencyCode: string;
   timeZone: string;

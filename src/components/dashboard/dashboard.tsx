@@ -12,6 +12,7 @@ import { formatCurrency, formatFullDate, formatInteger, formatPercent } from "@/
 import { EventUsers, PageTraffic, SourcesTable } from "./breakdowns";
 import { CartFunnel, CartVsSalesChart, RevenueChart, type ChartRow } from "./charts";
 import { KpiCard, type Comparison, type KpiData } from "./kpi-card";
+import { QrCard } from "./qr-card";
 import { fadeUp, staggerContainer } from "./motion";
 import {
   DEFAULT_SELECTION,
@@ -175,6 +176,11 @@ export function Dashboard() {
           <CartFunnel totals={report?.totals ?? null} />
         </motion.section>
 
+        {/* QR codes get a row of their own, above the rest of the breakdowns. */}
+        <motion.section variants={staggerContainer} aria-label="QR codes">
+          <QrCard qr={report?.qr ?? null} currency={currency} />
+        </motion.section>
+
         {/* Users by event (35%) beside revenue (65%) on large screens; stacked below. */}
         <motion.section
           variants={staggerContainer}
@@ -191,13 +197,13 @@ export function Dashboard() {
           />
         </motion.section>
 
-        <motion.section variants={staggerContainer} aria-label="Origem / mídia" className="grid gap-3 sm:gap-4">
+        <motion.section
+          variants={staggerContainer}
+          aria-label="Origem / mídia"
+          className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-2"
+        >
           <PageTraffic page={report?.page ?? null} />
-          <SourcesTable
-            rows={report?.sources ?? null}
-            totals={report?.totals ?? null}
-            currency={currency}
-          />
+          <SourcesTable rows={report?.sources ?? null} totals={report?.totals ?? null} currency={currency} />
         </motion.section>
       </motion.main>
     </MotionConfig>

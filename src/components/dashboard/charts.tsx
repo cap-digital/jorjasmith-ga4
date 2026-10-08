@@ -13,7 +13,7 @@ import { Grid } from "@/components/charts/grid";
 import { Legend, LegendItem, LegendLabel, LegendMarker, LegendValue } from "@/components/charts/legend";
 import { ChartTooltip, TooltipContent } from "@/components/charts/tooltip";
 import { XAxis } from "@/components/charts/x-axis";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIsWide } from "@/hooks/use-is-wide";
 import { GRANULARITY_LABELS, type Bucket, type Granularity } from "@/lib/buckets";
@@ -35,25 +35,40 @@ export function ChartCard({
   title,
   description,
   action,
+  button,
   className,
   children,
 }: {
   title: string;
   description?: string;
+  /** Wide header content (e.g. a legend): sits beside the title and wraps below it when space runs out. */
   action?: ReactNode;
+  /** Compact control pinned top-right (e.g. "Expandir"); title and description wrap beside it. */
+  button?: ReactNode;
   className?: string;
   children: ReactNode;
 }) {
+  const heading = (
+    // wrap-anywhere: long URLs in descriptions must not widen the title column past the button.
+    <div className="grid min-w-0 gap-1 wrap-anywhere">
+      <CardTitle>{title}</CardTitle>
+      {description && <CardDescription>{description}</CardDescription>}
+    </div>
+  );
   return (
     <motion.div variants={fadeUp} className={className}>
       <Card className="h-full">
-        <CardHeader className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-          <div className="grid gap-1">
-            <CardTitle>{title}</CardTitle>
-            {description && <CardDescription>{description}</CardDescription>}
-          </div>
-          {action}
-        </CardHeader>
+        {button ? (
+          <CardHeader className="gap-x-4">
+            {heading}
+            <CardAction>{button}</CardAction>
+          </CardHeader>
+        ) : (
+          <CardHeader className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+            {heading}
+            {action}
+          </CardHeader>
+        )}
         <CardContent className="flex-1">{children}</CardContent>
       </Card>
     </motion.div>
