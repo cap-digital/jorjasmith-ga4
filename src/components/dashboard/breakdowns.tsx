@@ -15,20 +15,17 @@ const integer = (value: number | null) => (value === null ? "—" : formatIntege
 export function SourcesTable({
   rows,
   totals,
-  totalSessions,
   currency,
   className,
 }: {
   rows: Ga4SourceRow[] | null;
   totals: Ga4Metrics | null;
-  totalSessions: number;
   currency: string;
   className?: string;
 }) {
   const [query, setQuery] = useState("");
   const columns = useMemo<SourceColumn<Ga4SourceRow>[]>(
     () => [
-      { key: "sessions", label: "Sessões", mobileLabel: "sessões", format: integer, total: sumOf("sessions") },
       {
         key: "itemsAddedToCart",
         label: "Adições ao carrinho",
@@ -58,14 +55,14 @@ export function SourcesTable({
   return (
     <ChartCard
       title="Origem / mídia · ingresso"
-      description="Origem da sessão · sessões com interação com o ingresso (carrinho, checkout ou compra)"
+      description="Origem da sessão em que o ingresso foi adicionado ao carrinho ou comprado"
       className={className}
       action={<SourceSearch value={query} onChange={setQuery} />}
     >
       <SourceTable
         rows={rows}
         columns={columns}
-        totals={totals && { ...totals, sessions: totalSessions }}
+        totals={totals}
         query={query}
         defaultSort="itemRevenue"
       />

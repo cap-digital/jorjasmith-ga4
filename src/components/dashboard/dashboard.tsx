@@ -196,7 +196,6 @@ export function Dashboard() {
           <SourcesTable
             rows={report?.sources ?? null}
             totals={report?.totals ?? null}
-            totalSessions={report?.sourcesTotalSessions ?? 0}
             currency={currency}
           />
         </motion.section>

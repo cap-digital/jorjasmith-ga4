@@ -25,8 +25,6 @@ export type Ga4DateRange = { startDate: string; endDate: string };
 export type Ga4SourceRow = {
   /** GA4 sessionSourceMedium, e.g. "google / cpc". */
   sourceMedium: string;
-  /** Sessions with an event carrying the item (cart, checkout or purchase), not all site sessions. */
-  sessions: number;
   itemsAddedToCart: number;
   itemsPurchased: number;
   itemRevenue: number;
@@ -65,8 +63,6 @@ export type Ga4Report = {
   change: Record<Ga4MetricKey, number | null>;
   /** Sorted by revenue, then cart adds. */
   sources: Ga4SourceRow[];
-  /** GA4's own total of `sources[].sessions` (deduplicated, so it can differ slightly from the row sum). */
-  sourcesTotalSessions: number;
   /** Sorted by users. */
   eventUsers: Ga4EventUsersRow[];
   page: {
